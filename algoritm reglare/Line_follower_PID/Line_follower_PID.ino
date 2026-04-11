@@ -1,117 +1,80 @@
 #include <Arduino.h>
-// Definirea pinilor pe porturi (pentru referință)
-// LEFT_PWM: Pin 9  -> Port B, Bit 1
-// RIGHT_PWM: Pin 10 -> Port B, Bit 2
-// LEFT_IN1: Pin 2  -> Port D, Bit 2
-// LEFT_IN2: Pin 4  -> Port D, Bit 4
-// RIGHT_IN1: Pin 7 -> Port D, Bit 7
-// RIGHT_IN2: Pin 8 -> Port B, Bit 0
-// SENZORI: A0-A4   -> Port C, Biții 0-4
+#include <QTRSensors.h>
 
-const uint8_t LEFT_PWM  = 9;   
-const uint8_t LEFT_IN1  = 2;   
-const uint8_t LEFT_IN2  = 4;   
+const uint8_t LEFT_PWM  = 9;
+const uint8_t LEFT_IN1  = 2;
+const uint8_t LEFT_IN2  = 4;
+const uint8_t RIGHT_PWM = 10;
+const uint8_t RIGHT_IN1 = 7;
+const uint8_t RIGHT_IN2 = 8;
 
-const uint8_t RIGHT_PWM = 10;  
-const uint8_t RIGHT_IN1 = 7;   
-const uint8_t RIGHT_IN2 = 8;   
-int SENSOR_PINS[5] = {A0, A1, A2, A3, A4};
-
-const uint8_t CLP = 5; 
-const uint8_t NEAR=6;
-
-int16_t ultimaEroareCunoscuta = 0;
-int16_t eroareaAnterioara = 0;
-const int VITEZA_BAZA = 120; 
- // valoare mică
-int sumaErori = 0;
-
-const float Kp = 0.6; 
-const float Ki = 0.03;
+const int VITEZA_BAZA = 90;
+const float Kp = 5;
+const float Ki = 0.01;
 const float Kd = 30;
 
-inline int calculeazaEroareMemorie() {
-  uint8_t stare = (~PINC) & 0b00011111;
-  int eroareCurenta = 0;
-  
-  if (stare==0) {
-    if (ultimaEroareCunoscuta < 0) return -250;
-    if (ultimaEroareCunoscuta > 0) return 250;
-    return 0;
-  }
+int16_t eroareaAnterioara = 0;
+int sumaErori = 0;
 
-  switch (stare) {
-    case 0b00100: eroareCurenta = 0;    break;
-    case 0b01100: eroareCurenta = -50;  break;
-    case 0b00110: eroareCurenta = 50;   break;
-    case 0b01000: eroareCurenta = -100; break;
-    case 0b00010: eroareCurenta = 100;  break;
-    case 0b11000: eroareCurenta = -150; break;
-    case 0b00011: eroareCurenta = 150;  break;
-    case 0b10000: eroareCurenta = -200; break;
-    case 0b00001: eroareCurenta = 200;  break;
-    default:      eroareCurenta = ultimaEroareCunoscuta; break;
-  }
-
-  ultimaEroareCunoscuta = eroareCurenta;
-  return eroareCurenta;
-}
+QTRSensors qtr;
+const uint8_t SensorCount = 8;
+uint16_t sensorValues[SensorCount];
 
 inline void mutaMotoare(int vStanga, int vDreapta) {
- 
-  vStanga = constrain(vStanga, -255, 255);
-  vDreapta = constrain(vDreapta, -255, 255);
+  vStanga  = constrain(vStanga,  -100 , 255);
+  vDreapta = constrain(vDreapta, -100, 255);
 
-  // Motor STÂNGA - Direcție și PWM
   if (vStanga >= 0) {
-    PORTD &= ~(1 << 2); // Pin 2 LOW
-    PORTD |=  (1 << 4); // Pin 4 HIGH
-    //analogWrite(LEFT_PWM, vStanga);
+    digitalWrite(LEFT_IN1, LOW);
+    digitalWrite(LEFT_IN2, HIGH);
   } else {
-    PORTD |=  (1 << 2); // Pin 2 HIGH
-    PORTD &= ~(1 << 4); // Pin 4 LOW
-    //analogWrite(LEFT_PWM, abs(vStanga));
+    digitalWrite(LEFT_IN1, HIGH);
+    digitalWrite(LEFT_IN2, LOW);
   }
   analogWrite(LEFT_PWM, abs(vStanga));
-  // Motor DREAPTA - Direcție și PWM
+
   if (vDreapta >= 0) {
-    PORTD |=  (1 << 7); // Pin 7 HIGH
-    PORTB &= ~(1 << 0); // Pin 8 LOW
+    digitalWrite(RIGHT_IN1, HIGH);
+    digitalWrite(RIGHT_IN2, LOW);
   } else {
-    PORTD &= ~(1 << 7); // Pin 7 LOW
-    PORTB |=  (1 << 0); // Pin 8 HIGH
+    digitalWrite(RIGHT_IN1, LOW);
+    digitalWrite(RIGHT_IN2, HIGH);
   }
   analogWrite(RIGHT_PWM, abs(vDreapta));
 }
 
 void setup() {
-  //Serial.begin(9600); // Pornim comunicarea serială
-  //Serial.println("--- ROBOT LINE FOLLOWER READY ---");
+  Serial.begin(9600);
+  pinMode(LEFT_PWM,  OUTPUT);
+  pinMode(LEFT_IN1,  OUTPUT);
+  pinMode(LEFT_IN2,  OUTPUT);
+  pinMode(RIGHT_PWM, OUTPUT);
+  pinMode(RIGHT_IN1, OUTPUT);
+  pinMode(RIGHT_IN2, OUTPUT);
 
-  DDRD |= (1 << 2) | (1 << 4) | (1 << 7); // Pinii 2, 4, 7
-  DDRB |= (1 << 0) | (1 << 1) | (1 << 2); // Pinii 8, 9, 10
-  DDRC |= 0b00000;
+  qtr.setTypeAnalog();
+  qtr.setSensorPins((const uint8_t[]){A0, A1, A2, A3, A4, A5, A6, A7}, SensorCount);
 
-  pinMode(CLP, INPUT_PULLUP);
-  pinMode(NEAR, INPUT_PULLUP);
-  
-  Serial.println("Astept apasare buton CLP...");
-  while(digitalRead(CLP) == LOW) {
-    delay(10);
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, HIGH);
+  Serial.println("Calibrare... Misca robotul pe linie!");
+  for (uint16_t i = 0; i < 200; i++) {
+    qtr.calibrate();
   }
-  
-  //Serial.println("START!");
-  delay(500);
+  digitalWrite(LED_BUILTIN, LOW);
+  Serial.println("Calibrare terminata.");
 }
 
 void loop() {
-  int eroare = calculeazaEroareMemorie();
-  int derivata = eroare - eroareaAnterioara;
-  sumaErori =(sumaErori*0.8)+eroare;
-  sumaErori = constrain(sumaErori, -1000, 1000);
+  uint16_t pozitie = qtr.readLineBlack(sensorValues);
+  int eroareaCurenta = (int)pozitie - 3500;
+  int derivata = eroareaCurenta - eroareaAnterioara;
 
-  int corectie = (eroare * Kp) + (derivata * Kd) + (sumaErori * Ki);
+  sumaErori = (sumaErori * 0.8) + eroareaCurenta;
+  sumaErori = constrain(sumaErori, -10000, 10000);
 
-  eroareaAnterioara = eroare;
-  mutaMotoare(VITEZA_BAZA +corectie, VITEZA_BAZA - corectie);
+  int corectie = (eroareaCurenta * Kp) + (derivata * Kd) + (sumaErori * Ki);
+  eroareaAnterioara = eroareaCurenta;
+
+  mutaMotoare(VITEZA_BAZA + corectie, VITEZA_BAZA - corectie);
 }
