@@ -15,13 +15,13 @@ const int32_t Kd1000 = 50000;  // Kd = 55.0
 
 // Viteza adaptiva x10000 — fara float
 const int32_t Kp_v10000 = 80;   // Kp_v = 0.0001
-const int32_t Kd_v10000 = 500;  // Kd_v = 0.005
+const int32_t Kd_v10000 = 700;  // Kd_v = 0.005
 
 // Atenuare x1000 — fara float
 const int32_t K_at1000 = 600;  // K_atenuare = 0.18
 
 const int VITEZA_MAX       = 255;
-const int VITEZA_MIN_CURBA = 90;
+const int VITEZA_MIN_CURBA = 60;
 
 int16_t eroareaAnterioara = 0;
 int32_t sumaErori         = 0;
